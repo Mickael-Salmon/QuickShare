@@ -13,7 +13,9 @@ C'est une approche simple et rapide pour partager des fichiers et des applicatio
   - [Instructions sur comment préparer votre environnement virtuel Python](#instructions-sur-comment-préparer-votre-environnement-virtuel-python)
   - [Prérequis](#prérequis)
   - [Instructions](#instructions)
+  - [🐚 Pour les utilisateurs de Bash ou Zsh](#-pour-les-utilisateurs-de-bash-ou-zsh)
     - [Bash ou Zsh](#bash-ou-zsh)
+  - [🐟 Pour les utilisateurs de Fish Shell](#-pour-les-utilisateurs-de-fish-shell)
     - [Fish](#fish)
   - [Après utilisation du script - Désactivation de l'environnement virtuel](#après-utilisation-du-script---désactivation-de-lenvironnement-virtuel)
   - [Installation de Ngrok 📦](#installation-de-ngrok-)
@@ -42,6 +44,7 @@ pour exécuter le script de partage de fichiers. Les instructions diffèrent sel
 
 ## Instructions
 
+## 🐚 Pour les utilisateurs de Bash ou Zsh
 ### Bash ou Zsh
 1. Ouvrez votre terminal et naviguez vers le dossier contenant le script Python.
 2. Exécutez les commandes suivantes pour créer et activer un environnement virtuel :
@@ -58,6 +61,7 @@ pour exécuter le script de partage de fichiers. Les instructions diffèrent sel
     python quickShare.py
     ```
 
+## 🐟 Pour les utilisateurs de Fish Shell
 ### Fish
 1. Ouvrez votre terminal et naviguez vers le dossier contenant le script Python.
 2. Exécutez les commandes suivantes pour créer et activer un environnement virtuel :
@@ -105,10 +109,30 @@ import signal
 import sys
 import json
 import requests
+from colorama import Fore, Style
+from tqdm import tqdm
 
-# Function to stop the HTTP server and ngrok
+def start_ngrok(port):
+    global ngrok_process
+    print(f"{Fore.GREEN}Démarrage du tunnel ngrok sur le port {port}...{Style.RESET_ALL}")
+    ngrok_process = subprocess.Popen(["ngrok", "http", str(port)], stdout=subprocess.PIPE)
+
+    # Wait a bit for ngrok to initialize and get the public URL
+    for _ in tqdm(range(10)):
+        time.sleep(1)
+
+    response = requests.get("http://localhost:4040/api/tunnels")
+    ngrok_data = json.loads(response.text)
+    ngrok_url = ngrok_data['tunnels'][0]['public_url']
+
+    # Check if ngrok initialized properly
+    if not ngrok_url:
+        print(f"{Fore.RED}Erreur : ngrok n'a pas pu initialiser le tunnel.{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.BLUE}Lien de partage : {ngrok_url}/{Style.RESET_ALL}")
+
 def cleanup(signum, frame):
-    print("Arrêt du serveur HTTP et de ngrok...")
+    print(f"{Fore.YELLOW}Arrêt du serveur HTTP et de ngrok...{Style.RESET_ALL}")
     if http_server_process:
         http_server_process.terminate()
     if ngrok_process:
@@ -123,32 +147,29 @@ signal.signal(signal.SIGTERM, cleanup)
 http_server_process = None
 ngrok_process = None
 
-# Change to the share/temp directory
-subprocess.run(["cd", "~/share/temp"], shell=True)
+# Ask user for the type of sharing
+choice = input(f"{Fore.MAGENTA}Quel type de partage souhaitez-vous ?\n1) Partage de fichiers\n2) Partage d'application web\nChoix: {Style.RESET_ALL}")
+if choice not in ['1', '2']:
+    print(f"{Fore.RED}Choix invalide.{Style.RESET_ALL}")
+    sys.exit(1)
 
-# Start the HTTP server
-print("Démarrage du serveur HTTP sur le port 8080...")
-http_server_process = subprocess.Popen(["python3", "-m", "http.server", "8080"])
+# Ask user for the port number
+port = input(f"{Fore.CYAN}Entrez le numéro du port sur lequel démarrer le service (par exemple, 8080 ou 3000): {Style.RESET_ALL}")
 
-# Start the ngrok tunnel
-print("Démarrage du tunnel ngrok sur le port 8080...")
-ngrok_process = subprocess.Popen(["ngrok", "http", "8080"], stdout=subprocess.PIPE)
+# Start the appropriate service based on the user choice
+if choice == '1':
+    print(f"{Fore.GREEN}Démarrage du serveur HTTP sur le port {port}...{Style.RESET_ALL}")
+    http_server_process = subprocess.Popen(["python3", "-m", "http.server", port])
+    start_ngrok(port)
 
-# Wait a bit for ngrok to initialize and get the public URL
-time.sleep(10)
-response = requests.get("http://localhost:4040/api/tunnels")
-ngrok_data = json.loads(response.text)
-ngrok_url = ngrok_data['tunnels'][0]['public_url']
-
-# Check if ngrok initialized properly
-if not ngrok_url:
-    print("Erreur : ngrok n'a pas pu initialiser le tunnel.")
-else:
-    print(f"Lien de partage : {ngrok_url}/")
+elif choice == '2':
+    print(f"{Fore.GREEN}Assurez-vous que votre application web est en cours d'exécution sur le port {port}...{Style.RESET_ALL}")
+    start_ngrok(port)
 
 # Wait for user to stop the HTTP server and ngrok
-input("Appuyez sur [Enter] ou Ctrl+C pour arrêter le serveur et ngrok...")
+input(f"{Fore.YELLOW}Appuyez sur [Enter] ou Ctrl+C pour arrêter le serveur et ngrok...{Style.RESET_ALL}")
 cleanup(None, None)
+
 
 ```
 
@@ -165,7 +186,7 @@ Pour l'utiliser :
 Pour exposer une application web en développement, suivez les étapes ci-dessous :
 
 1. Assurez-vous que votre application web est en cours d'exécution localement sur un port spécifique (par exemple, 3000).
-2. Ouvrez un terminal et lancez la commande suivante :
+2. Ouvrez un terminal et lancez le script mais cette fois sélectionnez l'option 2:
 
 ```bash
 ngrok http 3000
